@@ -318,7 +318,7 @@ mancanti (imputazione per la SVM, stato `unknown` per la BN).
 
 ## 7. Guida all'esecuzione (pipeline in 4 passi)
 
-Tutti i comandi si lanciano **dalla cartella principale** del progetto (`icon_diabete_V6/`).
+Tutti i comandi si lanciano **dalla cartella principale** del progetto .
 
 ### Passo 1 — Crea il dataset unificato
 

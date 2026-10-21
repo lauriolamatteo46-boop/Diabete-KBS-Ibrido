@@ -1080,4 +1080,4 @@ Riaddestrare un modello da codice: `SVMModel().train()` e `BayesianModel().train
 
 ---
 
-*README generato analizzando il codice sorgente e i dataset del progetto `icon_diabete_V6`. Progetto didattico: non è un dispositivo medico.*
+Progetto didattico: non è un dispositivo medico.*

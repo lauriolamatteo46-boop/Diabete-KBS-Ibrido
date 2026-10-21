@@ -1,4 +1,4 @@
-# Diabete KBS Ibrido (`icon_diabete_V6`)
+# Diabete KBS Ibrido 
 
 > **Sistema ibrido di supporto alla valutazione del rischio di diabete di tipo 2**, basato su
 > **regole cliniche simboliche (stile Datalog)**, **ontologia leggera**, **Support Vector Machine (SVM)**

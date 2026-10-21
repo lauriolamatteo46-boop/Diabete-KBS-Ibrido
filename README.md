@@ -33,8 +33,7 @@
 10. [Esempi d'uso](#10-esempi-duso)
 11. [Uso programmatico (API Python)](#11-uso-programmatico-api-python)
 12. [Riepilogo delle librerie e delle funzioni usate](#12-riepilogo-delle-librerie-e-delle-funzioni-usate)
-13. [Limiti noti e osservazioni sul codice](#13-limiti-noti-e-osservazioni-sul-codice)
-14. [Possibili sviluppi futuri](#14-possibili-sviluppi-futuri)
+13. [Possibili sviluppi futuri](#14-possibili-sviluppi-futuri)
 
 ---
 
@@ -1057,72 +1056,8 @@ Riaddestrare un modello da codice: `SVMModel().train()` e `BayesianModel().train
 
 ---
 
-## 13. Limiti noti e osservazioni sul codice
 
-Questa sezione raccoglie ciò che è emerso **leggendo il codice, ispezionando i dati e rieseguendo builder e training SVM**
-(la parte di Rete Bayesiana non è stata eseguita in fase di verifica perché `pgmpy` non era disponibile nell'ambiente: per essa
-si descrive il comportamento che risulta dal codice). Sono osservazioni utili sia per interpretare correttamente i risultati
-sia come spunti di miglioramento.
-
-1. **La classe `prediabetes` non esiste nei dati di training.** In `standard_target()` ogni etichetta non riconosciuta resta `normal`: le **53 righe Mendeley con
-   classe `P`** (*pre-diabetic*) finiscono quindi in `normal` (per questo Mendeley risulta 156 `normal` = 102 + 1 + 53). Nel CSV unificato
-   non c'è alcuna riga `prediabetes`: la SVM è comunque binaria, ma la BN impara di fatto solo due stati del target e restituisce `prediabetes = 0.0`
-   (via `setdefault`). Di conseguenza `prediabetes` può emergere solo dal motore a regole, e — con SVM e BN entrambe caricate e BN con P(prediabetes)=0 — non può mai risultare
-   la classe finale: se le regole indicano `prediabetes`, il contributo massimo è 0,40 × 0,66 = 0,264, mentre `normal` e `type2_diabetes` si spartiscono 0,25 + 0,35 = 0,60 (quindi la maggiore delle due vale almeno 0,30).
-   *Correzione suggerita:* in `adapt_mendeley` mappare `p` → `prediabetes`.
-
-2. **Unità di misura non omogenee tra i dataset** (i nomi di colonna indicano mg/dL, cm, ecc., ma i dati originali non lo rispettano):
-   - DiaBD: `glucose` (0–33,46, media 7,56) è in **mmol/L** ma finisce in `fasting_glucose_mg_dl`; `height` (0,36–1,96) è in **metri** ma finisce in `height_cm`;
-   - Mendeley: colesterolo, trigliceridi, HDL, LDL, VLDL e urea hanno valori tipici di **mmol/L** (medie 4,86 / 2,35 / 1,20 / 2,61 / 1,85 / 5,12) ma sono memorizzati in colonne `_mg_dl`;
-   - le soglie di `discretize()` e delle regole sono in mg/dL: tutte le righe DiaBD (glicemia ≤ 33) cadono quindi in `glucose_group = normal`;
-   - la GUI chiede valori in mg/dL, mentre la SVM ha visto, per lipidi e glicemia di alcune fonti, scale diverse.
-
-3. **Outlier non filtrati.** In DiaBD il BMI va da 1,22 a 574,13 (ad es. un'altezza di 0,36 m con 72,6 kg) e il peso minimo è 3 kg. Il builder non applica controlli di plausibilità.
-
-4. **Colonne di anamnesi/laboratorio rimaste vuote.** `family_history_diabetes` e `hypertension_history` sono sempre `NaN` perché gli alias cercati
-   (`family_history`, `hypertension`) non coincidono con i nomi in DiaBD (`family_diabetes`, `hypertensive`); `creatinine_mg_dl` è sempre `NaN` perché in Mendeley la colonna si chiama `Cr`
-   e non è tra gli alias (`creatinineratio`, `creatinine`). La SVM le scarta automaticamente grazie a `_select_available_features`.
-
-5. **Codifica del sesso non uniforme.** DiaBD produce `female/male`, Mendeley `f/m`, Pima `NaN`: l'One-Hot Encoder vede quattro categorie distinte (più la sostituzione con il valore più frequente per i mancanti).
-   *Suggerimento:* normalizzare a `female/male` negli adattatori.
-
-6. **Imputazione e sorgenti diverse.** HbA1c, insulina e lipidi esistono ciascuno in **una sola** sorgente; la mediana usata per imputarli quando mancano proviene da quella sorgente
-   (Mendeley è per l'84 % composta da casi positivi). Quando un campo non viene inserito, la SVM riceve quindi un valore "tipico di un paziente diabetico".
-   Esempio osservato rieseguendo il training: per il caso A (45 anni, glicemia 95, PA 120/80, BMI 26, senza HbA1c) la SVM stima P(diabete) ≈ 0,92, mentre le regole indicano `normal`.
-   Inoltre sorgenti con prevalenza e scale diverse possono permettere al modello di "riconoscere la sorgente" invece del quadro clinico, e la valutazione usa un solo split casuale 75/25 senza cross-validation:
-   le metriche (accuracy ≈ 0,84) sono quindi **indicative**.
-
-7. **Valori mancanti = 0 nelle regole.** `derive()` usa `float(v.get(k) or 0)`: un valore assente equivale a 0 e quindi non attiva alcun fatto (comportamento prudente, ma non distingue "mancante" da "zero").
-
-8. **Rete Bayesiana e campi lasciati vuoti.** `discretize()` legge le colonne con `df.get(c)`; se la colonna non esiste nel DataFrame, `pd.to_numeric(None)` solleva un errore
-   (verificato con pandas 3.0.5: `ValueError: Input array must be 1 dimensional`). La GUI **omette** dal dizionario i campi vuoti, quindi, con il file `.bif` presente,
-   la valutazione si interrompe con un messaggio di errore se manca uno qualsiasi tra `age_years`, `bmi` (cioè peso **e** altezza), `systolic_bp_mmhg`, `diastolic_bp_mmhg`,
-   `fasting_glucose_mg_dl`, `hba1c_percent`, `triglycerides_mg_dl`. Inoltre, i nodi `age_group` e `bmi_group` non hanno lo stato `unknown` nel training (tutte le righe hanno età e BMI):
-   un'evidenza `unknown` su quei nodi potrebbe non essere valida per pgmpy (comportamento non verificato in questo ambiente).
-   *Soluzione pratica:* compilare tutti i campi sopra elencati, oppure non addestrare la BN (il sistema funziona con regole + SVM).
-   *Correzione suggerita:* in `discretize()` usare `df.get(c, pd.Series(float("nan"), index=df.index))` e gestire/mappare gli stati assenti in `_build_evidence`.
-
-9. **GUI: i valori predefiniti non vengono inseriti.** In `App.reset()` la riga `entry.insert(0, DEFAULTS[key])` è fuori dal ciclo `for` (indentazione), quindi all'avvio e dopo
-   *Ripristina valori* tutti i campi risultano **vuoti**. Correzione (indentare l'inserimento dentro il ciclo):
-
-   ```python
-   for key, entry in self.entries.items():
-       entry.delete(0, "end")
-       entry.insert(0, DEFAULTS[key])
-   ```
-
-10. **Fusione.** I pesi non sono normalizzati e la SVM è binaria (il suo "normal" include il prediabete): `final_score` va letto come indice, non come probabilità (vedi [§9](#9-la-fusione-dei-risultati)).
-    Le regole sono molto "decise": un singolo marcatore diagnostico porta a `type2_diabetes` (nella pratica clinica una diagnosi richiede conferma).
-
-11. **Avviso di deprecazione.** Con scikit-learn 1.9 compare un `FutureWarning` sul parametro `probability` di `SVC` (viene passato esplicitamente a `False`): è innocuo.
-
-12. **Sicurezza dei file `.pkl`.** I file joblib/pickle possono eseguire codice al caricamento: caricare solo modelli generati da te o da fonti fidate.
-
-13. **Nessuna validazione dell'input e nessun test automatico.** La GUI non controlla intervalli o unità (es. glicemia in mmol/L inserita per errore) e il progetto non include una suite di test.
-
----
-
-## 14. Possibili sviluppi futuri
+## 13. Possibili sviluppi futuri
 
 - **Armonizzare le unità di misura** negli adattatori (mmol/L → mg/dL: glicemia ×18, colesterolo ×38,67, trigliceridi ×88,57; metri → cm) e filtrare gli outlier.
 - **Mappare la classe `P` di Mendeley a `prediabetes`** e rivalutare BN e fusione con tre classi reali.

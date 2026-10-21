@@ -215,9 +215,20 @@ class BayesianModel:
         if self.model is None:
             raise RuntimeError("Rete non creata prima della stima delle CPD.")
 
+        state_names = {
+            "age_group": ["young", "middle", "older", "unknown"],
+            "bmi_group": ["normal", "overweight", "obese", "unknown"],
+            "glucose_group": ["normal", "borderline", "high", "unknown"],
+            "hba1c_group": ["normal", "borderline", "high", "unknown"],
+            "bp_group": ["normal", "high", "unknown"],
+            "lipid_risk": ["normal", "high", "unknown"],
+            TARGET_COLUMN: EXPECTED_CLASSES,
+        }
+
         estimator = BayesianEstimator(
             self.model,
             discrete_data,
+            state_names=state_names,
         )
 
         cpds = estimator.get_parameters(
@@ -329,7 +340,22 @@ class BayesianModel:
             if pd.isna(state):
                 state = "unknown"
 
-            evidence[node] = str(state)
+            state_str = str(state)
+
+            if self.model is not None:
+                try:
+                    cpd = self.model.get_cpds(node)
+                    if cpd is not None and hasattr(cpd, "state_names"):
+                        allowed_states = cpd.state_names.get(node, [])
+                        if state_str not in allowed_states:
+                            if "unknown" in allowed_states:
+                                state_str = "unknown"
+                            else:
+                                continue
+                except Exception:
+                    pass
+
+            evidence[node] = state_str
 
         return evidence
 

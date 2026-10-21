@@ -1,4 +1,4 @@
-# Diabete KBS Ibrido 
+# Diabete KBS Ibrido (`icon_diabete_V6`)
 
 > **Sistema ibrido di supporto alla valutazione del rischio di diabete di tipo 2**, basato su
 > **regole cliniche simboliche (stile Datalog)**, **ontologia leggera**, **Support Vector Machine (SVM)**
@@ -18,7 +18,7 @@
 4. [Struttura del progetto](#4-struttura-del-progetto)
 5. [Requisiti e installazione](#5-requisiti-e-installazione)
 6. [Dataset utilizzati](#6-dataset-utilizzati)
-7. [Guida all'esecuzione (pipeline in 4 passi)](#7-guida-allesecuzione-pipeline-in-4-passi)
+7. [Guida all'esecuzione (pipeline e test)](#7-guida-allesecuzione-pipeline-e-test)
 8. [Documentazione dei moduli: funzioni, classi e come funzionano](#8-documentazione-dei-moduli-funzioni-classi-e-come-funzionano)
    - [8.1 `dataset_builder/`](#81-dataset_builder)
    - [8.2 `ml_engine/feature_engineering.py`](#82-ml_enginefeature_engineeringpy)
@@ -28,6 +28,7 @@
    - [8.6 `diagnosis_engine.py`](#86-diagnosis_enginepy)
    - [8.7 `report_generator.py`](#87-report_generatorpy)
    - [8.8 `main_gui.py`](#88-main_guipy)
+   - [8.9 `test_pipeline.py`](#89-test_pipelinepy)
 9. [La fusione dei risultati](#9-la-fusione-dei-risultati)
 10. [Esempi d'uso](#10-esempi-duso)
 11. [Uso programmatico (API Python)](#11-uso-programmatico-api-python)
@@ -40,14 +41,16 @@
 ## 1. Panoramica
 
 **Diabete KBS Ibrido** è un'applicazione Python che, a partire da una serie di **valori clinici numerici**
-(età, sesso, peso, altezza, pressione arteriosa, glicemia a digiuno, HbA1c, profilo lipidico, ecc.),
-restituisce una **valutazione a tre classi**:
+(età, sesso, peso, altezza, pressione arteriosa, glicemia a digiuno, HbA1c, insulina, profilo lipidico, ecc.),
+esegue una diagnosi differenziale rigorosa e restituisce una **valutazione differenziata a cinque classi**:
 
-| Classe finale     | Significato                                                            |
-|-------------------|------------------------------------------------------------------------|
-| `normal`          | nessun pattern clinico significativo                                    |
-| `prediabetes`     | pattern compatibile con rischio glicemico aumentato                     |
-| `type2_diabetes`  | pattern compatibile con diabete di tipo 2 o rischio elevato             |
+| Classe finale       | Nome a display                                              | Significato clinico                                                            |
+|---------------------|-------------------------------------------------------------|--------------------------------------------------------------------------------|
+| `healthy`           | Stato in salute ottimale                                    | parametri glicemici, pressori, lipidici e ponderali nei limiti fisiologici     |
+| `normal`            | Non diabete (Fattori di rischio da monitorare)              | glicemia e HbA1c normali, ma presenti fattori cardiovascolari/metabolici (es. PA, lipidi o BMI) |
+| `prediabetes`       | Prediabete (Rischio glicemico aumentato)                    | alterata glicemia a digiuno (100–125 mg/dL) o HbA1c borderline (5.7–6.4%)      |
+| `type1_diabetes`    | Diabete Mellito di Tipo 1                                   | iperglicemia con marcato deficit insulinico (< 5 µIU/mL), esordio giovanile o normopeso |
+| `type2_diabetes`    | Diabete Mellito di Tipo 2                                   | iperglicemia correlata a insulino-resistenza, obesità/sovrappeso, età matura   |
 
 L'idea centrale è **l'ibridazione di paradigmi diversi dell'Intelligenza Artificiale**:
 
@@ -140,6 +143,7 @@ icon_diabete_V6/
 ├── main_gui.py                      # Interfaccia grafica Tkinter (punto di ingresso dell'applicazione)
 ├── diagnosis_engine.py              # Motore di fusione: HybridDiagnosis + funzione diagnose()
 ├── report_generator.py              # Esportazione del referto PDF (ReportLab)
+├── test_pipeline.py                 # Suite di test automatici (Feature Engineering, BN e Motore Ibrido)
 ├── requirements.txt                 # Dipendenze Python
 ├── README.md                        # Questo file
 │
@@ -316,9 +320,9 @@ mancanti (imputazione per la SVM, stato `unknown` per la BN).
 
 ---
 
-## 7. Guida all'esecuzione (pipeline in 4 passi)
+## 7. Guida all'esecuzione (pipeline e test)
 
-Tutti i comandi si lanciano **dalla cartella principale** del progetto .
+Tutti i comandi si lanciano **dalla cartella principale** del progetto (`icon_diabete_V6/`).
 
 ### Passo 1 — Crea il dataset unificato
 
@@ -338,14 +342,15 @@ Output a console (esempio reale):
 
 ```text
 Importato Dataset of Diabetes .csv | righe: 1000 | sorgente: mendeley
-Importato diabetes (1).csv | righe: 768 | sorgente: pima
 Importato DiaBD_A Diabetes Dataset for Enhanced Risk Analysis and Research in Bangladesh.csv | righe: 5288 | sorgente: diabd
+Importato diabetes (1).csv | righe: 768 | sorgente: pima
 
 CSV unificato creato: .../data/processed/diabetes_clinical_unified.csv
 Righe: 7056
 diabetes_class
-normal            5602
+normal            5549
 type2_diabetes    1454
+prediabetes         53
 ```
 
 ### Passo 2 — Addestra la SVM
@@ -374,6 +379,17 @@ python main_gui.py
 
 Compila i campi e premi **✓ Valuta**. Se hai saltato i passi 2 e/o 3, la GUI funziona comunque (solo regole +
 ontologia, o regole + il modello disponibile).
+
+### Passo 5 — Verifica automatica della pipeline (Test)
+
+```bash
+python test_pipeline.py
+```
+
+Esegue una suite di test rapida su 3 casi clinici specifici:
+1. **Paziente Sano**: verifica il flusso di discretizzazione e diagnosi con parametri regolari;
+2. **Diabete Tipo 2 (Scompenso Lipidico)**: testa il caso critico con trigliceridi molto alti (`triglycerides_mg_dl = 900`), verificando che lo stato `'high'` per `lipid_risk` venga gestito senza errori dalla Rete Bayesiana;
+3. **Valori Mancanti (Robustezza)**: verifica la resilienza in presenza di parametri `None`/mancanti, confermando che vengano convertiti nello stato `'unknown'` senza provocare crash.
 
 > **Ordine obbligatorio:** il passo 1 deve precedere i passi 2 e 3. Se il CSV unificato non esiste, SVM e BN
 > sollevano `FileNotFoundError` con il messaggio *"Prima esegui: python dataset_builder/build_unified_dataset.py"*.
@@ -847,19 +863,39 @@ Ontologia: <severity, description, recommendations>
 
 Il pulsante *Esporta PDF* è disabilitato finché non è stata eseguita almeno una valutazione riuscita.
 
+### 8.9 `test_pipeline.py`
+
+Script dedicato ai test automatici dell'intera pipeline ibrida, avviabile sia come script standalone che in test CI:
+
+- **Scopo:** Valutare la robustezza della discretizzazione (`ml_engine/feature_engineering.py`), della Rete Bayesiana (`ml_engine/bn_model.py`) e del motore di fusione (`diagnosis_engine.py`) su profili clinici sintetici.
+- **Casi di test implementati (differenziazione clinica a 5 classi):**
+  1. `Stato in Salute Ottimale`: 28 anni, BMI 21.5, glicemia 85, HbA1c 4.9, PA 115/75, TG 90. Verifica l'attribuzione della classe `healthy`.
+  2. `Non Diabete (Ipertensione e Sovrappeso)`: 54 anni, BMI 28.5, glicemia 92, HbA1c 5.1, PA 145/92, TG 180. Verifica che la presenza di fattori di rischio cardiovascolare non induca una falsa diagnosi di diabete, attribuendo correttamente `normal`.
+  3. `Prediabete`: 48 anni, BMI 27.2, glicemia 112, HbA1c 5.9. Valuta la classe intermedia `prediabetes`.
+  4. `Diabete di Tipo 1`: 19 anni, normopeso (BMI 19.2), glicemia 230, HbA1c 9.5, insulina 2.5 µIU/mL. Valuta il riconoscimento del fenotipo autoimmune/insulino-privo (`type1_diabetes`).
+  5. `Diabete di Tipo 2`: 62 anni, obeso (BMI 34), glicemia 175, HbA1c 8.4, insulina 24.0 µIU/mL, PA 150/95, TG 260. Valuta il riconoscimento del fenotipo metabolico/insulino-resistente (`type2_diabetes`).
+  6. `Valori Mancanti (Robustezza)`: paziente con parametri `None`. Verifica che i dati assenti vengano convertiti nello stato `'unknown'` e che l'inferenza si completi senza crash.
+- **Esecuzione:**
+  ```bash
+  python test_pipeline.py
+  ```
+
 ---
 
-## 9. La fusione dei risultati
+## 9. La fusione dei risultati e diagnosi differenziale
 
-Implementata in `HybridDiagnosis.evaluate()`. Si lavora su un dizionario `combined_scores = {"normal": 0, "prediabetes": 0, "type2_diabetes": 0}`.
+Implementata in `HybridDiagnosis.evaluate()`. Il sistema integra la conoscenza simbolica del dominio con i modelli statistico-probabilistici supervisionati operando su cinque classi distinte:
+`healthy`, `normal`, `prediabetes`, `type1_diabetes`, `type2_diabetes`.
 
-1. **Regole (peso 0,40).** Il motore a regole restituisce una sola classe con uno score: viene sommato **solo alla classe indicata**
-   `combined_scores[rule.label] += 0.40 × rule.score`.
-2. **SVM (peso 0,25).** Se caricata, produce due probabilità:
-   `normal += 0.25 × P_svm(normal)` ; `type2_diabetes += 0.25 × P_svm(type2_diabetes)` (la SVM non conosce `prediabetes`).
-3. **Rete Bayesiana (peso 0,35).** Se caricata, ogni classe riceve `0.35 × P_bn(classe)` (tutte e tre).
-4. **Classe finale** = `max(combined_scores, key=combined_scores.get)`. `final_score` è il punteggio di quella classe.
-5. **Ontologia**: `ontology.get_info(label_finale)` aggiunge severità, descrizione e raccomandazioni (non influisce sul voto).
+1. **Regole Datalog (peso 0,40).** Il motore a regole valuta le soglie cliniche oggettive e conduce la **diagnosi differenziale**:
+   - differenzia Diabete Tipo 1 vs Tipo 2 sulla base di marcatori specifici (insulina < 5 µIU/mL, età < 35, normopeso vs insulino-resistenza, età matura, obesità e sindrome metabolica);
+   - distingue lo stato in salute ottimale dal non diabete con fattori di rischio cardiovascolare/metabolico (ipertensione, dislipidemia, sovrappeso).
+   Lo score di confidenza (da 0,80 a 0,95) viene assegnato alla classe specifica.
+2. **SVM (peso 0,25).** Fornisce la stima supervisionata binaria (non-diabete / diabete). La probabilità di non-diabete supporta le classi `healthy` e `normal`, mentre la probabilità di diabete converge verso la variante differenziata (`type1_diabetes` o `type2_diabetes`).
+3. **Rete Bayesiana (peso 0,35).** Fornisce la distribuzione probabilistica sulle tre classi di base (`normal`, `prediabetes`, `type2_diabetes`), allocando i pesi coerentemente con il fenotipo del paziente.
+4. **Salvaguardia di Consistenza Clinica:**
+   Un paziente con glicemia e HbA1c perfettamente normali (< 100 mg/dL e < 5.7%) non può in alcun caso ricevere una diagnosi di diabete conclamato; analogamente, in presenza di iperglicemia diagnostica (≥ 126 mg/dL o HbA1c ≥ 6.5%), l'esito è rigorosamente vincolato a `type1_diabetes` o `type2_diabetes`.
+5. **Ontologia**: arricchisce l'esito finale con nome clinico esteso, categoria, descrizione, livello di gravità e raccomandazioni pratiche.
 
 ### Esempio numerico (valori ipotetici, a scopo illustrativo)
 
@@ -1017,6 +1053,7 @@ Riaddestrare un modello da codice: `SVMModel().train()` e `BayesianModel().train
 | `diagnosis_engine.py` | `HybridDiagnosis.evaluate`, `diagnose` | fusione dei componenti |
 | `report_generator.py` | `export_pdf` | referto PDF |
 | `main_gui.py` | `App.reset / evaluate / export` | interazione utente |
+| `test_pipeline.py` | `esegui_test` | suite di test su profili clinici e robustezza |
 
 ---
 

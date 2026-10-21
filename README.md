@@ -1,4 +1,4 @@
-# Diabete KBS Ibrido 
+# Diabete KBS Ibrido (`icon_diabete_V6`)
 
 > **Sistema ibrido di supporto alla valutazione del rischio di diabete di tipo 2**, basato su
 > **regole cliniche simboliche (stile Datalog)**, **ontologia leggera**, **Support Vector Machine (SVM)**
@@ -143,6 +143,7 @@ icon_diabete_V6/
 ├── diagnosis_engine.py              # Motore di fusione: HybridDiagnosis + funzione diagnose()
 ├── report_generator.py              # Esportazione del referto PDF (ReportLab)
 ├── test_pipeline.py                 # Suite di test automatici (Feature Engineering, BN e Motore Ibrido)
+├── test_full_project.py             # Suite globale di collaudo (42 test: dati, modelli, regole, Tipo 1/2/Prediabete/Salute)
 ├── requirements.txt                 # Dipendenze Python
 ├── README.md                        # Questo file
 │
@@ -382,13 +383,20 @@ ontologia, o regole + il modello disponibile).
 ### Passo 5 — Verifica automatica della pipeline (Test)
 
 ```bash
+# Test rapido di pipeline:
 python test_pipeline.py
+
+# Test globale e approfondito di collaudo (42 test su tutti i componenti):
+python test_full_project.py
 ```
 
-Esegue una suite di test rapida su 3 casi clinici specifici:
-1. **Paziente Sano**: verifica il flusso di discretizzazione e diagnosi con parametri regolari;
-2. **Diabete Tipo 2 (Scompenso Lipidico)**: testa il caso critico con trigliceridi molto alti (`triglycerides_mg_dl = 900`), verificando che lo stato `'high'` per `lipid_risk` venga gestito senza errori dalla Rete Bayesiana;
-3. **Valori Mancanti (Robustezza)**: verifica la resilienza in presenza di parametri `None`/mancanti, confermando che vengano convertiti nello stato `'unknown'` senza provocare crash.
+`test_full_project.py` esegue una suite completa di 42 verifiche suddivise in 6 sezioni:
+1. **Dati e Modelli**: integrità del CSV unificato, presenza dei modelli addestrati `.bif` e `.pkl`;
+2. **Feature Engineering**: rispetto delle soglie cliniche e gestione di `None`/valori assenti;
+3. **Conoscenza Simbolica (Datalog)**: corretta attivazione dei fatti e diagnosi differenziale delle regole;
+4. **Modelli Statistici (SVM + BN)**: inferenza probabilistica, somma delle masse a 1 e stabilità su valori estremi;
+5. **Diagnosi Differenziale Completa**: test su 12 scenari clinici (Diabete Tipo 1, Diabete Tipo 2, Prediabete, Non Diabete con ipertensione/lipidi, Stato in salute, stress test);
+6. **Ontologia e Report PDF**: coerenza semantica ed effettiva generazione del referto PDF.
 
 > **Ordine obbligatorio:** il passo 1 deve precedere i passi 2 e 3. Se il CSV unificato non esiste, SVM e BN
 > sollevano `FileNotFoundError` con il messaggio *"Prima esegui: python dataset_builder/build_unified_dataset.py"*.
@@ -1053,6 +1061,7 @@ Riaddestrare un modello da codice: `SVMModel().train()` e `BayesianModel().train
 | `report_generator.py` | `export_pdf` | referto PDF |
 | `main_gui.py` | `App.reset / evaluate / export` | interazione utente |
 | `test_pipeline.py` | `esegui_test` | suite di test su profili clinici e robustezza |
+| `test_full_project.py` | `main` | collaudo globale a 42 test su tutti i componenti |
 
 ---
 
